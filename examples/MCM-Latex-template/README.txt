@@ -1,0 +1,1 @@
+https://github.com/EmpyreanHYR/MCM-Latex-template
