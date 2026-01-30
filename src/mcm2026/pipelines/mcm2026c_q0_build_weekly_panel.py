@@ -158,23 +158,34 @@ def build_weekly_panel(df_wide_raw: pd.DataFrame) -> pd.DataFrame:
 
     agg["active_flag"] = agg["judge_score_total"] > 0
 
-    results_week = (
-        df_wide[["season", "celebrity_name", "results"]]
-        .copy()
-        .assign(elimination_week=lambda d: d["results"].map(_parse_results_week))
+    exit_info = df_wide[["season", "celebrity_name", "results"]].copy()
+    res = exit_info["results"].astype("string")
+    exit_info["exit_type"] = "unknown"
+    exit_info.loc[res.str.contains("Withdrew", na=False), "exit_type"] = "withdrew"
+    exit_info.loc[res.str.contains("Eliminated", na=False), "exit_type"] = "eliminated"
+    exit_info["elimination_week"] = exit_info["results"].map(_parse_results_week)
+
+    agg = agg.merge(
+        exit_info[["season", "celebrity_name", "exit_type", "elimination_week"]],
+        how="left",
+        on=["season", "celebrity_name"],
     )
-    agg = agg.merge(results_week[["season", "celebrity_name", "elimination_week"]], how="left", on=["season", "celebrity_name"])
+
+    agg["elimination_week"] = pd.to_numeric(agg["elimination_week"], errors="coerce").astype("Int64")
+    agg["exit_week_inferred"] = pd.NA
+    mask_exit = agg["exit_type"].isin(["eliminated", "withdrew"])
+    agg.loc[mask_exit, "exit_week_inferred"] = agg.loc[mask_exit, "elimination_week"]
+
+    mask_fallback = mask_exit & (agg["exit_week_inferred"].isna() | (agg["exit_week_inferred"] > agg["last_active_week"]))
+    agg.loc[mask_fallback, "exit_week_inferred"] = agg.loc[mask_fallback, "last_active_week"]
+    agg["exit_week_inferred"] = pd.to_numeric(agg["exit_week_inferred"], errors="coerce").astype("Int64")
 
     agg["eliminated_this_week"] = False
-    mask_elim = agg["elimination_week"].notna() & (agg["week"] == agg["elimination_week"]) & agg["results"].astype("string").str.contains(
-        "Eliminated", na=False
-    )
+    mask_elim = (agg["exit_type"] == "eliminated") & agg["exit_week_inferred"].notna() & (agg["week"] == agg["exit_week_inferred"])
     agg.loc[mask_elim, "eliminated_this_week"] = True
 
     agg["withdrew_this_week"] = False
-    mask_wd = agg["elimination_week"].notna() & (agg["week"] == agg["elimination_week"]) & agg["results"].astype("string").str.contains(
-        "Withdrew", na=False
-    )
+    mask_wd = (agg["exit_type"] == "withdrew") & agg["exit_week_inferred"].notna() & (agg["week"] == agg["exit_week_inferred"])
     agg.loc[mask_wd, "withdrew_this_week"] = True
 
     week_totals = (
