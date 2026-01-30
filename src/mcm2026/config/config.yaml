@@ -50,6 +50,48 @@ dwts:
     # 当前设置: 500 (足够的统计精度，r/m=25%)
     posterior_resample_r: 500
 
+  q2:
+    # Q2 使用哪一套 Q1 后验粉丝份额作为输入。
+    # - percent: 份额相加假设（更贴近“50/50 合成百分比”的现实叙事）
+    # - rank: 名次相加假设（更贴近“名次合成”的另一种公开说法）
+    # 用途：差异分析时切换此项，观察 match_rate 与争议周定位是否稳定。
+    fan_source_mechanism: percent
+
+    # 是否把“退赛/退出(Withdrew)”也视作离场事件，纳入 Q2 的 match 统计。
+    # - true: 更接近“本周离开节目”的事实口径（但会混入非投票淘汰）。
+    # - false: 更严格地只统计 eliminated_this_week（更纯粹的投票/规则口径）。
+    count_withdraw_as_exit: true
+
+  q3:
+    # Q3 的“人气线”使用哪一套 Q1 后验输出。
+    # 注意：这不会改变原始数据，只改变我们对 fan_vote_index 的估计口径。
+    fan_source_mechanism: percent
+
+    # Q3 不确定性传播强度：对 fan_vote_index 做后验扰动并 refit 的次数。
+    # - 越大：系数区间更稳定，但计算更慢。
+    # - 越小：速度快，但区间可能更“抖”。
+    n_refits: 15
+
+    # 随机种子：保证 refit 抽样与结果可复现。
+    seed: 20260130
+
+  q4:
+    # Q4 使用哪一套 Q1 后验粉丝份额作为“真实粉丝分布”的输入。
+    # 目的：做机制评价时，考察“输入口径变化”对 trade-off 结论的影响。
+    fan_source_mechanism: percent
+
+    # Q4 Monte Carlo 模拟次数：每个 season×mechanism×outlier 档位重复次数。
+    # - 越大：指标均值更稳定，champion_mode_prob 更平滑。
+    # - 越小：速度快，但噪声更大。
+    n_sims: 50
+
+    # 随机种子：保证 Q4 仿真可复现。
+    seed: 20260130
+
+    # 压力测试档位：把“最弱技术选手”的粉丝份额放大 outlier_mult 倍后重归一化。
+    # 解释：不是现实概率，而是风控压力测试（用于刻画 Bobby Bones 类外部动员风险边界）。
+    outlier_mults: [2.0, 5.0, 10.0]
+
 # =============================================================================
 # 未来扩展配置节点 (Future Extension Nodes)
 # =============================================================================

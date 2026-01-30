@@ -41,6 +41,18 @@ def _get_alpha_from_config() -> float:
     return float(node.get("alpha", 0.5))
 
 
+def _get_q2_params_from_config() -> tuple[str, bool]:
+    cfg = _load_config()
+    node = cfg.get("dwts", {}).get("q2", {}) if isinstance(cfg, dict) else {}
+
+    mech = str(node.get("fan_source_mechanism", "percent"))
+    if mech not in {"percent", "rank"}:
+        mech = "percent"
+
+    count_withdraw = bool(node.get("count_withdraw_as_exit", True))
+    return mech, count_withdraw
+
+
 def _read_weekly_panel() -> pd.DataFrame:
     fp = paths.processed_data_dir() / "dwts_weekly_panel.csv"
     return io.read_table(fp)
@@ -116,7 +128,14 @@ def _judge_save_from_bottom2(
     return sorted([str(a["celebrity_name"]), str(b["celebrity_name"])])[0]
 
 
-def _week_level_comparison(df_week: pd.DataFrame, q1_week: pd.DataFrame, *, alpha: float) -> dict:
+def _week_level_comparison(
+    df_week: pd.DataFrame,
+    q1_week: pd.DataFrame,
+    *,
+    alpha: float,
+    fan_source_mechanism: str,
+    count_withdraw_as_exit: bool,
+) -> dict:
     df_week = df_week.copy()
     df_week["active_flag"] = df_week["active_flag"].astype(bool)
 
@@ -127,8 +146,8 @@ def _week_level_comparison(df_week: pd.DataFrame, q1_week: pd.DataFrame, *, alph
     season = int(df_active["season"].iloc[0])
     week = int(df_active["week"].iloc[0])
 
-    # Merge fan share mean (percent mechanism) for active contestants.
-    q1 = q1_week.loc[q1_week["mechanism"] == "percent"].copy()
+    # Merge fan share mean (by config-selected mechanism) for active contestants.
+    q1 = q1_week.loc[q1_week["mechanism"].astype(str) == str(fan_source_mechanism)].copy()
     q1 = q1[["season", "week", "celebrity_name", "fan_share_mean"]].rename(columns={"fan_share_mean": "fan_share"})
 
     df_active = df_active.merge(q1, how="left", on=["season", "week", "celebrity_name"])
@@ -142,7 +161,9 @@ def _week_level_comparison(df_week: pd.DataFrame, q1_week: pd.DataFrame, *, alph
     if np.isfinite(s) and s > 0:
         df_active["fan_share"] = df_active["fan_share"] / s
 
-    exit_mask = df_active["eliminated_this_week"].astype(bool) | df_active["withdrew_this_week"].astype(bool)
+    exit_mask = df_active["eliminated_this_week"].astype(bool)
+    if bool(count_withdraw_as_exit):
+        exit_mask = exit_mask | df_active["withdrew_this_week"].astype(bool)
     observed = sorted(df_active.loc[exit_mask, "celebrity_name"].astype(str).tolist())
     k = int(len(observed))
 
@@ -188,6 +209,8 @@ def _week_level_comparison(df_week: pd.DataFrame, q1_week: pd.DataFrame, *, alph
         "n_active": int(len(df_active)),
         "n_exit": k,
         "alpha": float(alpha),
+        "fan_source_mechanism": str(fan_source_mechanism),
+        "count_withdraw_as_exit": int(bool(count_withdraw_as_exit)),
         "observed_exit": "|".join(observed) if observed else "",
         "pred_exit_percent": "|".join(pred_percent) if pred_percent else "",
         "pred_exit_rank": "|".join(pred_rank) if pred_rank else "",
@@ -213,13 +236,21 @@ def run(*, alpha: float | None = None) -> Q2Outputs:
     alpha_cfg = _get_alpha_from_config()
     alpha = alpha_cfg if alpha is None else float(alpha)
 
+    fan_source_mechanism_cfg, count_withdraw_as_exit_cfg = _get_q2_params_from_config()
+
     weekly = _read_weekly_panel()
     q1 = _read_q1_posterior_summary()
 
     rows: list[dict] = []
     for (season, week), df_week in weekly.groupby(["season", "week"], sort=True, dropna=False):
         q1_week = q1.loc[(q1["season"] == season) & (q1["week"] == week)]
-        row = _week_level_comparison(df_week, q1_week, alpha=alpha)
+        row = _week_level_comparison(
+            df_week,
+            q1_week,
+            alpha=alpha,
+            fan_source_mechanism=fan_source_mechanism_cfg,
+            count_withdraw_as_exit=count_withdraw_as_exit_cfg,
+        )
         if row:
             rows.append(row)
 
@@ -238,6 +269,8 @@ def run(*, alpha: float | None = None) -> Q2Outputs:
             {
                 "season": int(season),
                 "alpha": float(alpha),
+                "fan_source_mechanism": str(fan_source_mechanism_cfg),
+                "count_withdraw_as_exit": int(bool(count_withdraw_as_exit_cfg)),
                 "n_weeks": int(len(g)),
                 "n_exit_weeks": int(len(exit_weeks)),
                 "n_single_exit_weeks": int(len(single_exit_weeks)),
