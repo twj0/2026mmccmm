@@ -35,9 +35,7 @@ This is the working Chinese draft (no images). Figures will be inserted later du
 - `src/`: reusable code
   - `src/mcm2026/core/`: paths / project conventions
   - `src/mcm2026/data/`: data IO + auditing
-  - `src/mcm2026/models/`: baseline ML/DL models
-  - `src/mcm2026/validation/`: sanity checks / validation
-  - `src/mcm2026/pipelines/`: reproducible pipelines (optional)
+  - `src/mcm2026/pipelines/`: reproducible pipelines
 - `outputs/`: generated figures/tables/predictions for the paper
 - `paper/`: LaTeX paper (template from `examples/MCM-Latex-template`)
 
