@@ -18,7 +18,20 @@ description: 目标
 
 - Any figure/table used in the paper must be reproducible by running `run_all.py`.
 - Outputs must be written to `outputs/` (generated artifacts should not be edited by hand).
-- Respect the problem statement data policy (external data only if explicitly allowed).
+- Respect the problem statement data policy (external data is allowed but must be fully documented).
+
+## Data Policy (DWTS)
+
+- The problem statement permits adding additional information/data, but all sources must be documented.
+- External data is treated as **optional** signals for priors/features/explanations (e.g., popularity proxies), not a replacement for rule-based constraints.
+- Current repository external datasets under `data/raw/` include Wikipedia pageviews, US state population, and Google Trends.
+  - Wikipedia pageviews are expected to be the primary popularity proxy.
+  - Google Trends may have missing/error rows; pipelines must be robust to `trends_status` errors and `n_points=0`.
+
+## Modeling Constraints (DWTS)
+
+- Do not claim absolute vote totals; outputs should be fan vote **share/index** with uncertainty.
+- Avoid decision-time leakage: when modeling a week `t`, do not use information that would only be known after week `t` (unless explicitly flagged as post-hoc analysis).
 
 ## Showtime (Optional)
 
