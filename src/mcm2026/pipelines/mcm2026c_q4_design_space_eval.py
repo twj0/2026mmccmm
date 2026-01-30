@@ -64,6 +64,34 @@ def _get_alpha_from_config() -> float:
     return float(node.get("alpha", 0.5))
 
 
+def _get_q4_params_from_config() -> tuple[str, int, int, list[float]]:
+    cfg = _load_config()
+    node = cfg.get("dwts", {}).get("q4", {}) if isinstance(cfg, dict) else {}
+
+    mech = str(node.get("fan_source_mechanism", "percent"))
+    if mech not in {"percent", "rank"}:
+        mech = "percent"
+
+    n_sims = int(node.get("n_sims", 50))
+    if n_sims <= 0:
+        n_sims = 50
+
+    seed = int(node.get("seed", 20260130))
+
+    outlier_mults_raw = node.get("outlier_mults", [2.0, 5.0, 10.0])
+    outlier_mults: list[float] = []
+    if isinstance(outlier_mults_raw, (list, tuple)):
+        for x in outlier_mults_raw:
+            try:
+                outlier_mults.append(float(x))
+            except Exception:
+                continue
+    if not outlier_mults:
+        outlier_mults = [2.0, 5.0, 10.0]
+
+    return mech, n_sims, seed, outlier_mults
+
+
 def _read_weekly_panel() -> pd.DataFrame:
     return io.read_table(paths.processed_data_dir() / "dwts_weekly_panel.csv")
 
@@ -454,24 +482,36 @@ def _simulate_one(
 
 def run(
     *,
-    n_sims: int = 50,
-    seed: int = 20260130,
+    n_sims: int | None = None,
+    seed: int | None = None,
     alpha: float | None = None,
     outlier_mults: list[float] | None = None,
+    fan_source_mechanism: str | None = None,
 ) -> Q4Outputs:
     paths.ensure_dirs()
 
     alpha_cfg = _get_alpha_from_config()
     alpha = alpha_cfg if alpha is None else float(alpha)
+
+    mech_cfg, n_sims_cfg, seed_cfg, outlier_mults_cfg = _get_q4_params_from_config()
+    fan_source_mechanism = mech_cfg if fan_source_mechanism is None else str(fan_source_mechanism)
+    if fan_source_mechanism not in {"percent", "rank"}:
+        fan_source_mechanism = "percent"
+
+    n_sims = int(n_sims_cfg) if n_sims is None else int(n_sims)
+    if n_sims <= 0:
+        n_sims = int(n_sims_cfg)
+
+    seed = int(seed_cfg) if seed is None else int(seed)
     
     # Default outlier multipliers for robustness stress testing
     if outlier_mults is None:
-        outlier_mults = [2.0, 5.0, 10.0]
+        outlier_mults = list(outlier_mults_cfg)
 
     weekly = _read_weekly_panel()
     q1 = _read_q1_posterior_summary()
 
-    q1p = q1.loc[q1["mechanism"].astype(str) == "percent"].copy()
+    q1p = q1.loc[q1["mechanism"].astype(str) == str(fan_source_mechanism)].copy()
 
     key_cols = [
         "season",

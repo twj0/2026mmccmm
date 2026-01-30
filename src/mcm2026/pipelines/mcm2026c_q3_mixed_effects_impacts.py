@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
+import yaml
 
 from mcm2026.core import paths
 from mcm2026.data import io
@@ -17,6 +18,39 @@ from mcm2026.data import io
 @dataclass(frozen=True)
 class Q3Outputs:
     impact_coeffs_csv: Path
+
+
+def _config_path() -> Path:
+    return paths.repo_root() / "src" / "mcm2026" / "config" / "config.yaml"
+
+
+def _load_config() -> dict:
+    fp = _config_path()
+    if not fp.exists():
+        return {}
+
+    text = fp.read_text(encoding="utf-8")
+    if not text.strip():
+        return {}
+
+    cfg = yaml.safe_load(text)
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _get_q3_params_from_config() -> tuple[str, int, int]:
+    cfg = _load_config()
+    node = cfg.get("dwts", {}).get("q3", {}) if isinstance(cfg, dict) else {}
+
+    mech = str(node.get("fan_source_mechanism", "percent"))
+    if mech not in {"percent", "rank"}:
+        mech = "percent"
+
+    n_refits = int(node.get("n_refits", 15))
+    if n_refits <= 0:
+        n_refits = 15
+
+    seed = int(node.get("seed", 20260130))
+    return mech, n_refits, seed
 
 
 def _read_weekly_panel() -> pd.DataFrame:
@@ -50,6 +84,8 @@ def _build_season_level_dataset(
     weekly: pd.DataFrame,
     season_features: pd.DataFrame,
     q1_post: pd.DataFrame,
+    *,
+    fan_source_mechanism: str,
 ) -> pd.DataFrame:
     weekly = weekly.copy()
     weekly["active_flag"] = weekly["active_flag"].astype(bool)
@@ -65,8 +101,8 @@ def _build_season_level_dataset(
         .reset_index()
     )
 
-    # Fan line: use Q1 percent mechanism only; aggregate to season-level mean.
-    q1p = q1_post.loc[q1_post["mechanism"].astype(str) == "percent"].copy()
+    # Fan line: use config-selected Q1 mechanism; aggregate to season-level mean.
+    q1p = q1_post.loc[q1_post["mechanism"].astype(str) == str(fan_source_mechanism)].copy()
     q1p = q1p.merge(
         w_active[["season", "week", "celebrity_name"]],
         how="inner",
@@ -228,14 +264,30 @@ def _extract_fixed_effect_table(
     return pd.DataFrame(rows)
 
 
-def run(*, n_refits: int = 15, seed: int = 20260130) -> Q3Outputs:
+def run(
+    *,
+    n_refits: int | None = None,
+    seed: int | None = None,
+    fan_source_mechanism: str | None = None,
+) -> Q3Outputs:
     paths.ensure_dirs()
+
+    mech_cfg, n_refits_cfg, seed_cfg = _get_q3_params_from_config()
+    fan_source_mechanism = mech_cfg if fan_source_mechanism is None else str(fan_source_mechanism)
+    if fan_source_mechanism not in {"percent", "rank"}:
+        fan_source_mechanism = "percent"
+
+    n_refits = int(n_refits_cfg) if n_refits is None else int(n_refits)
+    if n_refits <= 0:
+        n_refits = int(n_refits_cfg)
+
+    seed = int(seed_cfg) if seed is None else int(seed)
 
     weekly = _read_weekly_panel()
     season_features = _read_season_features()
     q1_post = _read_q1_posterior_summary()
 
-    df = _build_season_level_dataset(weekly, season_features, q1_post)
+    df = _build_season_level_dataset(weekly, season_features, q1_post, fan_source_mechanism=fan_source_mechanism)
 
     rng = np.random.default_rng(int(seed))
 
