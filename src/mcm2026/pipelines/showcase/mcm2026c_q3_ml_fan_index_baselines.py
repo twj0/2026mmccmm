@@ -27,6 +27,18 @@ class Q3BaselineOutputs:
     cv_summary_csv: Path
 
 
+def _require_mainline_inputs() -> None:
+    fp_feat = paths.processed_data_dir() / "dwts_season_features.csv"
+    fp_q1 = paths.predictions_dir() / "mcm2026c_q1_fan_vote_posterior_summary.csv"
+    missing = [str(fp) for fp in [fp_feat, fp_q1] if not fp.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing mainline artifacts required for Q3 baselines: "
+            + ", ".join(missing)
+            + ". Run mainline Q0+Q1 first (python run_all.py)."
+        )
+
+
 def _make_preprocessor(*, numeric_features: list[str], categorical_features: list[str]) -> ColumnTransformer:
     numeric_pipe = Pipeline(
         steps=[
@@ -105,6 +117,8 @@ def run(
 ) -> Q3BaselineOutputs:
     paths.ensure_dirs()
 
+    _require_mainline_inputs()
+
     mech_cfg, _, _ = q3_main._get_q3_params_from_config()
     fan_source_mechanism = mech_cfg if fan_source_mechanism is None else str(fan_source_mechanism)
     if fan_source_mechanism not in {"percent", "rank"}:
@@ -173,6 +187,7 @@ def run(
     out = pd.DataFrame(rows)
 
     out_dir = (paths.tables_dir() / "showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_fp = out_dir / "mcm2026c_q3_ml_fan_index_baselines_cv.csv"
     io.write_csv(out, out_fp)
 
