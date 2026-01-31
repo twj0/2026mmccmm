@@ -176,9 +176,10 @@ def _prob_set_without_replacement(weights: np.ndarray, selected_idx: np.ndarray)
     raise RuntimeError("unreachable")
 
 
-def _seed_for(season: int, week: int, mechanism: str) -> int:
+def _seed_for(season: int, week: int, mechanism: str, *, seed_base: int | None = None) -> int:
     mech = 1 if mechanism == "percent" else 2
-    return int(season) * 1000 + int(week) * 10 + mech
+    base = 0 if seed_base is None else int(seed_base)
+    return base * 1_000_000 + int(season) * 1000 + int(week) * 10 + mech
 
 
 def _summarize_samples(x: np.ndarray) -> tuple[float, float, float, float]:
@@ -205,6 +206,7 @@ def _infer_one_week(
     tau: float,
     m: int,
     r: int,
+    seed_base: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     df_week = df_week.copy()
     df_week["active_flag"] = df_week["active_flag"].astype(bool)
@@ -251,7 +253,7 @@ def _infer_one_week(
     season = int(df_active["season"].iloc[0])
     week = int(df_active["week"].iloc[0])
 
-    rng = np.random.default_rng(_seed_for(season, week, mechanism))
+    rng = np.random.default_rng(_seed_for(season, week, mechanism, seed_base=seed_base))
     pF = rng.dirichlet(alpha=np.ones(n_active, dtype=float), size=m)
 
     if n_exit == 0:
@@ -370,6 +372,7 @@ def run(
     tau: float | None = None,
     prior_draws_m: int | None = None,
     posterior_resample_r: int | None = None,
+    seed_base: int | None = None,
     output_posterior_path: Path | None = None,
     output_uncertainty_path: Path | None = None,
 ) -> Q1Outputs:
@@ -395,6 +398,7 @@ def run(
                 tau=tau,
                 m=m,
                 r=r,
+                seed_base=seed_base,
             )
             weekly_rows.append(out_week)
             uncertainty_rows.append(summary)

@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from mcm2026.core import paths
 from mcm2026.data import io
 from mcm2026.pipelines import mcm2026c_q3_mixed_effects_impacts as q3_main
 
@@ -16,6 +17,18 @@ from mcm2026.pipelines import mcm2026c_q3_mixed_effects_impacts as q3_main
 @dataclass(frozen=True)
 class Q3RefitGridOutputs:
     grid_csv: Path
+
+
+def _require_mainline_inputs() -> None:
+    fp_feat = paths.processed_data_dir() / "dwts_season_features.csv"
+    fp_q1 = paths.predictions_dir() / "mcm2026c_q1_fan_vote_posterior_summary.csv"
+    missing = [str(fp) for fp in [fp_feat, fp_q1] if not fp.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing mainline artifacts required for Q3 refit grid: "
+            + ", ".join(missing)
+            + ". Run mainline Q0+Q1 first (python run_all.py)."
+        )
 
 
 def _as_int_list(x: object, default: list[int]) -> list[int]:
@@ -38,6 +51,9 @@ def run(
     max_runs: int | None = None,
 ) -> Q3RefitGridOutputs:
     out_dir = Path("outputs/tables/showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    _require_mainline_inputs()
 
     n_refits_list = _as_int_list(n_refits_grid, [10, 15, 30, 50])
     n_refits_list = [n for n in n_refits_list if n > 0]

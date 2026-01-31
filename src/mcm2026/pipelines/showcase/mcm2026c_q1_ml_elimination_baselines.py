@@ -27,7 +27,12 @@ class Q1BaselineOutputs:
 
 
 def _read_weekly_panel() -> pd.DataFrame:
-    return io.read_table(paths.processed_data_dir() / "dwts_weekly_panel.csv")
+    fp = paths.processed_data_dir() / "dwts_weekly_panel.csv"
+    if not fp.exists():
+        raise FileNotFoundError(
+            f"Missing processed dataset: {fp}. Run mainline Q0 first (python run_all.py)."
+        )
+    return io.read_table(fp)
 
 
 def _build_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -226,6 +231,7 @@ def run(
     out = pd.DataFrame(rows)
 
     out_dir = (paths.tables_dir() / "showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_fp = out_dir / "mcm2026c_q1_ml_elimination_baselines_cv.csv"
     io.write_csv(out, out_fp)
 

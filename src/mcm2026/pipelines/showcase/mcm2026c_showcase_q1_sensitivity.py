@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from mcm2026.core import paths
 from mcm2026.data import io
 from mcm2026.pipelines import mcm2026c_q1_smc_fan_vote as q1_main
 
@@ -17,6 +18,15 @@ from mcm2026.pipelines import mcm2026c_q1_smc_fan_vote as q1_main
 @dataclass(frozen=True)
 class Q1SensitivityOutputs:
     sensitivity_summary_csv: Path
+
+
+def _require_mainline_inputs() -> None:
+    fp_weekly = paths.processed_data_dir() / "dwts_weekly_panel.csv"
+    if not fp_weekly.exists():
+        raise FileNotFoundError(
+            f"Missing processed dataset required for Q1 sensitivity: {fp_weekly}. "
+            "Run mainline Q0 first (python run_all.py)."
+        )
 
 
 def _as_float_list(x: object, default: list[float]) -> list[float]:
@@ -54,6 +64,9 @@ def run(
     max_runs: int | None = None,
 ) -> Q1SensitivityOutputs:
     out_dir = Path("outputs/tables/showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    _require_mainline_inputs()
 
     alphas = _as_float_list(alpha_grid, [0.3, 0.5, 0.7])
     taus = _as_float_list(tau_grid, [0.02, 0.03, 0.05])
@@ -74,6 +87,7 @@ def run(
             tau=float(tau),
             prior_draws_m=int(m),
             posterior_resample_r=int(r),
+            seed_base=int(seed),
             output_posterior_path=tmp_pred,
             output_uncertainty_path=tmp_unc,
         )

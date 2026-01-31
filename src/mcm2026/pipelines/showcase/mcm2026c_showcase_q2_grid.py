@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from mcm2026.core import paths
 from mcm2026.data import io
 from mcm2026.pipelines import mcm2026c_q2_counterfactual_simulation as q2_main
 
@@ -15,6 +16,18 @@ from mcm2026.pipelines import mcm2026c_q2_counterfactual_simulation as q2_main
 @dataclass(frozen=True)
 class Q2GridOutputs:
     grid_csv: Path
+
+
+def _require_mainline_inputs() -> None:
+    fp_weekly = paths.processed_data_dir() / "dwts_weekly_panel.csv"
+    fp_q1 = paths.predictions_dir() / "mcm2026c_q1_fan_vote_posterior_summary.csv"
+    missing = [str(fp) for fp in [fp_weekly, fp_q1] if not fp.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing mainline artifacts required for Q2 grid: "
+            + ", ".join(missing)
+            + ". Run mainline Q0+Q1 first (python run_all.py)."
+        )
 
 
 def _as_str_list(x: object, default: list[str]) -> list[str]:
@@ -41,6 +54,9 @@ def run(
     count_withdraw_as_exit_grid: object = None,
 ) -> Q2GridOutputs:
     out_dir = Path("outputs/tables/showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    _require_mainline_inputs()
 
     mechs = _as_str_list(fan_source_mechanism_grid, ["percent", "rank"])
     mechs = [m for m in mechs if m in {"percent", "rank"}] or ["percent"]

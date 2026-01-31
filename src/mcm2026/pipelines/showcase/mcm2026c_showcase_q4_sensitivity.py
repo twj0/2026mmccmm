@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from mcm2026.core import paths
 from mcm2026.data import io
 from mcm2026.pipelines import mcm2026c_q4_design_space_eval as q4_main
 
@@ -17,6 +18,18 @@ from mcm2026.pipelines import mcm2026c_q4_design_space_eval as q4_main
 @dataclass(frozen=True)
 class Q4SensitivityOutputs:
     grid_csv: Path
+
+
+def _require_mainline_inputs() -> None:
+    fp_weekly = paths.processed_data_dir() / "dwts_weekly_panel.csv"
+    fp_q1 = paths.predictions_dir() / "mcm2026c_q1_fan_vote_posterior_summary.csv"
+    missing = [str(fp) for fp in [fp_weekly, fp_q1] if not fp.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "Missing mainline artifacts required for Q4 sensitivity grid: "
+            + ", ".join(missing)
+            + ". Run mainline Q0+Q1 first (python run_all.py)."
+        )
 
 
 def _as_float_list(x: object, default: list[float]) -> list[float]:
@@ -93,6 +106,9 @@ def run(
     max_runs: int | None = None,
 ) -> Q4SensitivityOutputs:
     out_dir = Path("outputs/tables/showcase") if output_dir is None else Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    _require_mainline_inputs()
 
     alphas = _as_float_list(alpha_grid, [0.3, 0.5, 0.7])
     n_sims_list = _as_int_list(n_sims_grid, [10, 20, 50])
